@@ -1,0 +1,19 @@
+# Зависности и изградња
+node_modules/
+dist/
+
+# Уграђена база (PGlite) — локални подаци, не иду у git
+mala-matura/server/.data/
+
+# Тајне — никад у git
+.env
+.env.*
+!.env.example
+
+# Скенирана збирка и решења (PDF) — извор садржаја, не иде у историју
+/*.pdf
+
+# Локални записи
+*.log
+.DS_Store
+Thumbs.db

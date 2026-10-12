@@ -1,0 +1,9 @@
+node_modules/
+dist/
+# Уграђена база (PGlite) и брава сервера — локални подаци, не иду у git.
+server/.data/
+# Тајне — никад у git.
+.env
+.env.*
+!.env.example
+*.log
