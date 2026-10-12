@@ -52,9 +52,12 @@ try {
       : `Налог „${username}“ већ постоји — не дира се (ни лозинка).`,
   );
 
-  const report = await seedContent(database.db, path.join(serverRoot, "data"));
+  // Тестови са завршних испита су у `data-private/` (ван git-а) — учитавају се ако фасцикла постоји.
+  const report = await seedContent(database.db, path.join(serverRoot, "data"), {
+    privateDir: path.join(serverRoot, "data-private"),
+  });
   console.log(
-    `Уписано ново: предмета ${report.subjects}, задатака ${report.questions}, слика ${report.images}, форми ${report.forms}.`,
+    `Уписано ново: предмета ${report.subjects}, задатака ${report.questions}, тестова ${report.tests}, слика ${report.images}, форми ${report.forms}.`,
   );
   if (report.errors.length) {
     console.error(`Прескочено због грешке (${report.errors.length}):`);

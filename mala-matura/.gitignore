@@ -7,3 +7,6 @@ server/.data/
 .env.*
 !.env.example
 *.log
+
+# Тестови са завршних испита — не смеју јавно
+server/data-private/

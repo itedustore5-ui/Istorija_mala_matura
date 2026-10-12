@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, download, imageUrl, type DataTable, type QuestionType } from "../api";
+import { api, download, imageUrl, zadataka, type DataTable, type QuestionType } from "../api";
 
 /**
  * Админ: налози и сагласност, задаци (садржај се мења само овде — задаци
@@ -229,6 +229,9 @@ type SubjectRow = { id: string; name: string; sections: { key: string; label: st
 type AdminQuestion = {
   id: number;
   subjectId: string;
+  /** NULL — задатак из збирке; иначе кључ теста са завршног испита. */
+  testKey: string | null;
+  partialCredit: { correct: number; points: number }[] | null;
   number: number;
   section: string;
   type: QuestionType;
@@ -389,11 +392,19 @@ function fromDraft(d: Draft, subjectId: string): { body?: Record<string, unknown
   };
 }
 
+type TestRow = { key: string; subjectId: string; label: string };
+
+/** Извор задатака у админу: збирка или један тест са завршног испита. */
+const COLLECTION = "zbirka";
+
 function QuestionsTab() {
   const [subjectsList, setSubjects] = useState<SubjectRow[]>([]);
   const [subjectId, setSubjectId] = useState("");
+  const [testsList, setTests] = useState<TestRow[]>([]);
+  const [source, setSource] = useState(COLLECTION);
   const [list, setList] = useState<AdminQuestion[]>([]);
   const [section, setSection] = useState("");
+  const [editing, setEditing] = useState<AdminQuestion | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [imagesList, setImages] = useState<{ name: string }[]>([]);
   const [msg, setMsg] = useState({ text: "", bad: false });
@@ -404,13 +415,21 @@ function QuestionsTab() {
       if (s[0]) setSubjectId(s[0].id);
     });
     api<{ name: string }[]>("/admin/images").then(setImages);
+    api<TestRow[]>("/admin/tests").then(setTests);
   }, []);
 
   const load = () =>
-    subjectId ? api<AdminQuestion[]>(`/admin/questions?subjectId=${encodeURIComponent(subjectId)}`).then(setList) : Promise.resolve();
+    subjectId
+      ? api<AdminQuestion[]>(
+          `/admin/questions?subjectId=${encodeURIComponent(subjectId)}&source=${encodeURIComponent(source)}`,
+        ).then(setList)
+      : Promise.resolve();
   useEffect(() => {
+    setSection("");
     void load();
-  }, [subjectId]);
+  }, [subjectId, source]);
+
+  const testLabel = (key: string | null) => testsList.find((t) => t.key === key)?.label ?? key ?? "";
 
   const sections = useMemo(() => [...new Set(list.map((q) => q.section))], [list]);
   const shown = list.filter((q) => !section || q.section === section);
@@ -427,6 +446,7 @@ function QuestionsTab() {
       else await api(`/admin/questions/${draft.id}`, { method: "PUT", body });
       setMsg({ text: "Задатак је сачуван.", bad: false });
       setDraft(null);
+      setEditing(null);
       await load();
       window.scrollTo({ top: 0 });
     } catch (e) {
@@ -461,18 +481,31 @@ function QuestionsTab() {
       <div className="space-y-4">
         <Message {...msg} />
         <Card title={draft.id === null ? "Нови задатак" : `Задатак ${draft.number}`}>
+          {editing?.testKey ? (
+            <p className="rounded-lg bg-brand-soft px-3 py-2 text-[15px]">
+              Задатак из теста „{testLabel(editing.testKey)}“. Тачан одговор мора остати онај из Упутства за
+              прегледање.
+              {editing.partialCredit?.length
+                ? ` Делимични бодови по упутству: ${editing.partialCredit
+                    .map((r) => `${r.correct} тачна реда и ниједан нетачан — ${String(r.points).replace(".", ",")} бода`)
+                    .join("; ")} — остају при измени.`
+                : ""}
+            </p>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Label text="Број у збирци">
+            <Label text={editing?.testKey ? "Број у тесту" : "Број у збирци"}>
               <input className="field" inputMode="numeric" value={draft.number} onChange={(e) => set({ number: e.target.value })} />
             </Label>
-            <Label text="Целина">
-              <input className="field" list="sections" value={draft.section} onChange={(e) => set({ section: e.target.value })} />
-              <datalist id="sections">
-                {sections.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
-            </Label>
+            {editing?.testKey ? null : (
+              <Label text="Целина">
+                <input className="field" list="sections" value={draft.section} onChange={(e) => set({ section: e.target.value })} />
+                <datalist id="sections">
+                  {sections.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </Label>
+            )}
             <Label text="Тип">
               <select className="field" value={draft.type} onChange={(e) => set({ type: e.target.value as QuestionType })}>
                 {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
@@ -644,7 +677,14 @@ function QuestionsTab() {
           <button type="button" className="btn btn-primary" onClick={save}>
             Сачувај
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setDraft(null)}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              setDraft(null);
+              setEditing(null);
+            }}
+          >
             Одустани
           </button>
         </div>
@@ -666,22 +706,45 @@ function QuestionsTab() {
               ))}
             </select>
           </Label>
-          <Label text="Целина">
-            <select className="field" value={section} onChange={(e) => setSection(e.target.value)}>
-              <option value="">све</option>
-              {sections.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+          <Label text="Извор">
+            <select className="field" value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value={COLLECTION}>збирка</option>
+              {testsList
+                .filter((t) => t.subjectId === subjectId)
+                .map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
             </select>
           </Label>
-          <div className="flex items-end">
-            <button type="button" className="btn btn-primary w-full" onClick={() => setDraft(emptyDraft(section || sections[0] || ""))}>
-              Нови задатак
-            </button>
-          </div>
+          {source === COLLECTION ? (
+            <Label text="Целина">
+              <select className="field" value={section} onChange={(e) => setSection(e.target.value)}>
+                <option value="">све</option>
+                {sections.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Label>
+          ) : null}
         </div>
+        {/* Нови задаци иду само у збирку: тестови са завршних испита су
+            затворени скупови од 20 задатака из Завода. */}
+        {source === COLLECTION ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setEditing(null);
+              setDraft(emptyDraft(section || sections[0] || ""));
+            }}
+          >
+            Нови задатак
+          </button>
+        ) : null}
       </Card>
       <ul className="space-y-2">
         {shown.map((q) => (
@@ -691,6 +754,7 @@ function QuestionsTab() {
               className="flex min-h-11 w-full items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5 text-left"
               onClick={() => {
                 setMsg({ text: "", bad: false });
+                setEditing(q);
                 setDraft(toDraft(q));
                 window.scrollTo({ top: 0 });
               }}
@@ -713,26 +777,44 @@ function QuestionsTab() {
 
 // ── Истраживање ───────────────────────────────────────────────────────────
 
+type FormRow = { testKey: string | null; questionNumbers: number[]; questionCount: number };
+
 type Study = {
   currentPhase: string | null;
   testOpen: boolean;
   practiceOpen: boolean;
   phases: string[];
   rotation: Record<string, Record<string, string>>;
-  subjects: { id: string; name: string; measurementStarted: boolean; forms: Record<string, number[]> }[];
+  subjects: {
+    id: string;
+    name: string;
+    measurementStarted: boolean;
+    tests: { key: string; label: string; year: number }[];
+    forms: Record<string, FormRow>;
+  }[];
 };
+
+/** Избор за форму: кључ теста или „бројеви из збирке“. */
+const FROM_COLLECTION = "";
 
 function StudyTab() {
   const [study, setStudy] = useState<Study | null>(null);
   const [formsText, setFormsText] = useState<Record<string, string>>({});
+  const [formsTest, setFormsTest] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState({ text: "", bad: false });
 
   const load = () =>
     api<Study>("/admin/study").then((s) => {
       setStudy(s);
       const text: Record<string, string> = {};
-      for (const subj of s.subjects) for (const [code, nums] of Object.entries(subj.forms)) text[`${subj.id}/${code}`] = nums.join(", ");
+      const test: Record<string, string> = {};
+      for (const subj of s.subjects)
+        for (const [code, f] of Object.entries(subj.forms)) {
+          text[`${subj.id}/${code}`] = f.questionNumbers.join(", ");
+          test[`${subj.id}/${code}`] = f.testKey ?? FROM_COLLECTION;
+        }
       setFormsText(text);
+      setFormsTest(test);
     });
   useEffect(() => {
     void load();
@@ -803,47 +885,71 @@ function StudyTab() {
             <p className="text-[15px] text-muted">Мерење је почело — форме се више не могу мењати.</p>
           ) : (
             <p className="text-[15px] text-muted">
-              Бројеви задатака из збирке, раздвојени зарезом. Форме бира истраживач; апликација их не прави сама.
+              За сваку форму изабери тест са завршног испита или упиши бројеве задатака из збирке. Форме бира
+              истраживач; апликација их не прави сама. Исти тест не може бити у две форме.
             </p>
           )}
-          {Object.keys(s.forms).map((code) => (
-            <div key={code} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <Label text={`Форма ${code} (${s.forms[code]!.length} задатака)`}>
-                  <input
+          {Object.keys(s.forms).map((code) => {
+            const key = `${s.id}/${code}`;
+            const chosenTest = formsTest[key] ?? FROM_COLLECTION;
+            return (
+              <div key={code} className="space-y-2 rounded-xl border border-line p-3">
+                <Label text={`Форма ${code} — сада: ${zadatakaShort(s.forms[code]!.questionCount)}`}>
+                  <select
                     className="field"
                     disabled={s.measurementStarted}
-                    value={formsText[`${s.id}/${code}`] ?? ""}
-                    onChange={(e) => setFormsText({ ...formsText, [`${s.id}/${code}`]: e.target.value })}
-                  />
+                    value={chosenTest}
+                    onChange={(e) => setFormsTest({ ...formsTest, [key]: e.target.value })}
+                  >
+                    {s.tests.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.label}
+                      </option>
+                    ))}
+                    <option value={FROM_COLLECTION}>задаци из збирке (по бројевима)</option>
+                  </select>
                 </Label>
+                {chosenTest === FROM_COLLECTION ? (
+                  <Label text="Бројеви задатака из збирке, раздвојени зарезом">
+                    <input
+                      className="field"
+                      disabled={s.measurementStarted}
+                      value={formsText[key] ?? ""}
+                      onChange={(e) => setFormsText({ ...formsText, [key]: e.target.value })}
+                    />
+                  </Label>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={s.measurementStarted}
+                  onClick={() =>
+                    put(
+                      `/admin/forms/${encodeURIComponent(s.id)}/${code}`,
+                      chosenTest !== FROM_COLLECTION
+                        ? { testKey: chosenTest }
+                        : {
+                            questionNumbers: (formsText[key] ?? "")
+                              .split(/[\s,;]+/)
+                              .filter(Boolean)
+                              .map(Number),
+                          },
+                      `Форма ${code} је сачувана.`,
+                    )
+                  }
+                >
+                  Сачувај форму {code}
+                </button>
               </div>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={s.measurementStarted}
-                onClick={() =>
-                  put(
-                    `/admin/forms/${encodeURIComponent(s.id)}/${code}`,
-                    {
-                      questionNumbers: (formsText[`${s.id}/${code}`] ?? "")
-                        .split(/[\s,;]+/)
-                        .filter(Boolean)
-                        .map(Number),
-                    },
-                    `Форма ${code} је сачувана.`,
-                  )
-                }
-              >
-                Сачувај {code}
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       ))}
     </div>
   );
 }
+
+const zadatakaShort = (n: number) => (n === 0 ? "празна" : zadataka(n));
 
 // ── Покушаји и извоз ──────────────────────────────────────────────────────
 

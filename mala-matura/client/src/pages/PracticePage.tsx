@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { api, clientInfo, isAnswered, type Answer, type Question, type Reveal, type Summary } from "../api";
+import { api, clientInfo, formatPoints, isAnswered, type Answer, type Question, type Reveal, type Summary } from "../api";
 import { BottomBar } from "../components/BottomBar";
 import { QuestionView } from "../components/QuestionView";
 import { flush, setTelemetryContext, track } from "../telemetry";
+
+/** Шта се вежба: целина збирке или цео тест са завршног испита. */
+export type PracticeSource = { subjectId: string; section: string } | { testKey: string };
 
 /**
  * Вежбање: једно питање по екрану, провера одмах.
  *
  * „Провери“ шаље одговор на `/submit` тог задатка; тек тада стижу кључ и
  * објашњење. Први предати одговор се рачуна — нема погађања до тачног.
- * На крају се целина затвара као један покушај.
+ * На крају се целина (или тест) затвара као један покушај.
  */
-export default function PracticePage({ subjectId, section }: { subjectId: string; section: string }) {
+export default function PracticePage({ source }: { source: PracticeSource }) {
+  const sourceKey = "testKey" in source ? `test:${source.testKey}` : `${source.subjectId}/${source.section}`;
+  const [title, setTitle] = useState("testKey" in source ? "" : source.section);
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
@@ -37,12 +42,13 @@ export default function PracticePage({ subjectId, section }: { subjectId: string
     setReveals({});
     spent.current = {};
     changes.current = {};
-    api<{ attempt: { id: number }; questions: Question[] }>("/practice/start", {
-      body: { subjectId, section, clientInfo: clientInfo() },
+    api<{ attempt: { id: number; title: string }; questions: Question[] }>("/practice/start", {
+      body: { ...source, clientInfo: clientInfo() },
     })
       .then((data) => {
         if (cancelled) return;
         setAttemptId(data.attempt.id);
+        setTitle(data.attempt.title);
         setQuestions(data.questions);
         // Ставке за ређање почињу редом који је сервер изабрао — измешано и
         // никад тачно.
@@ -54,7 +60,9 @@ export default function PracticePage({ subjectId, section }: { subjectId: string
     return () => {
       cancelled = true;
     };
-  }, [subjectId, section, round]);
+    // `source` је нов објекат при сваком приказу; `sourceKey` носи исто, а стабилан је.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey, round]);
 
   const question = questions[index];
 
@@ -132,10 +140,10 @@ export default function PracticePage({ subjectId, section }: { subjectId: string
     return (
       <main className="mx-auto max-w-2xl space-y-5 px-4 py-6">
         <section className="rounded-2xl border border-line bg-white p-6 text-center">
-          <p className="text-sm font-semibold text-muted">{section}</p>
+          <p className="text-sm font-semibold text-muted">{title}</p>
           <p className="mt-2 text-5xl font-bold">{summary.percentage}%</p>
           <p className="mt-2 text-[17px]">
-            Тачно {summary.score} од {summary.maxScore}
+            Бодови: {formatPoints(summary.score)} од {formatPoints(summary.maxScore)}
           </p>
           <p className="mt-1 text-[15px] text-muted">
             Урађено {summary.answered} од {summary.total} задатака. Покушај је сачуван.
@@ -146,7 +154,7 @@ export default function PracticePage({ subjectId, section }: { subjectId: string
             Вежбај поново
           </button>
           <Link href="/" className="btn btn-ghost w-full">
-            Друга целина
+            Почетна
           </Link>
         </div>
       </main>
@@ -162,9 +170,9 @@ export default function PracticePage({ subjectId, section }: { subjectId: string
     <main className="mx-auto max-w-2xl px-4 pt-4 pb-44">
       <p className="mb-3 text-sm text-muted">
         <Link href="/" className="inline-flex min-h-11 items-center underline">
-          Целине
+          Почетна
         </Link>{" "}
-        · {section}
+        · {title}
       </p>
       {error ? <p className="mb-3 rounded-lg bg-bad-soft px-4 py-3 text-bad">{error}</p> : null}
 

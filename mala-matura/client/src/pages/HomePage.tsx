@@ -88,6 +88,36 @@ export default function HomePage({ user }: { user: User }) {
               </ul>
             )}
           </div>
+
+          {/* Тестови са завршних испита. Сервер их шаље само ученицима ван
+              истраживања: учесницима су то форме провера знања. */}
+          {s.tests.length > 0 ? (
+            <div>
+              <h2 className="mb-2 text-lg font-semibold">Завршни испити претходних година</h2>
+              <ul className="space-y-2.5">
+                {s.tests.map((t) => (
+                  <li key={t.key}>
+                    <Link
+                      href={`/vezbanje-test/${encodeURIComponent(t.key)}`}
+                      className="flex min-h-11 items-center gap-3 rounded-xl border border-line bg-white px-4 py-3"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[17px] font-semibold">{t.label}</span>
+                        <span className="block text-[15px] text-muted">{zadataka(t.questionCount)} · цео тест</span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-lg px-2.5 py-1 text-[15px] font-bold ${
+                          t.bestPercent === null ? "text-muted" : "bg-brand-soft text-brand"
+                        }`}
+                      >
+                        {t.bestPercent === null ? "—" : `${t.bestPercent}%`}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ))}
     </main>

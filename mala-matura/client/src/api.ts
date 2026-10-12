@@ -65,6 +65,16 @@ export type Section = {
   bestPercent: number | null;
 };
 
+/** Тест са завршног испита, за вежбање (само ученицима ван истраживања). */
+export type PastTest = {
+  key: string;
+  label: string;
+  year: number;
+  questionCount: number;
+  attempts: number;
+  bestPercent: number | null;
+};
+
 export type Subject = {
   id: string;
   name: string;
@@ -72,6 +82,7 @@ export type Subject = {
   practice: { ok: boolean; reason?: string };
   test: { available: boolean; phase?: string; reason?: string };
   sections: Section[];
+  tests: PastTest[];
 };
 
 export type Summary = {
@@ -124,6 +135,9 @@ export const clientInfo = () => ({
   mobile: window.matchMedia("(max-width: 767px)").matches,
   screen: `${window.screen.width}x${window.screen.height}`,
 });
+
+/** Бодови са децималним зарезом: 18,5 — делимични бодови из упутства за прегледање. */
+export const formatPoints = (n: number) => n.toLocaleString("sr-RS", { maximumFractionDigits: 2 });
 
 /** „1 задатак“, „3 задатка“, „5 задатака“, „12 задатака“, „22 задатка“. */
 export function zadataka(n: number): string {

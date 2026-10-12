@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { api, clientInfo, isAnswered, zadataka, type Answer, type Question, type Summary } from "../api";
+import { api, clientInfo, formatPoints, isAnswered, zadataka, type Answer, type Question, type Summary } from "../api";
 import { BottomBar } from "../components/BottomBar";
 import { QuestionView } from "../components/QuestionView";
 import { flush, setTelemetryContext, track } from "../telemetry";
@@ -142,7 +142,7 @@ export default function TestPage({ subjectId }: { subjectId: string }) {
           <p className="text-sm font-semibold text-muted">Провера знања {summary.phase}</p>
           <p className="mt-2 text-5xl font-bold">{summary.percentage}%</p>
           <p className="mt-2 text-[17px]">
-            Тачно {summary.score} од {summary.maxScore}
+            Бодови: {formatPoints(summary.score)} од {formatPoints(summary.maxScore)}
           </p>
           <p className="mt-3 text-[15px] leading-snug text-muted">
             Тачни одговори се после провере не приказују — исти задаци се поново раде на једној од

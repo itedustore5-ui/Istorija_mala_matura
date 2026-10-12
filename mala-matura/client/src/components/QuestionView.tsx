@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { imageUrl, type Answer, type DataTable, type Question, type Reveal, type TableCell } from "../api";
+import { formatPoints, imageUrl, type Answer, type DataTable, type Question, type Reveal, type TableCell } from "../api";
 
 /**
  * Један задатак на екрану. Исти приказ ради пре одговора и после провере;
@@ -398,12 +398,19 @@ function RevealBox({ question, reveal }: { question: Question; reveal: Reveal })
     );
   }
 
+  // Делимични бодови постоје само у табелама тестова са завршног испита
+  // („два тачна реда и ниједан нетачан – 0,5 бодова“).
+  const partial = !reveal.isCorrect && reveal.points > 0;
+  const box = reveal.isCorrect ? "border-ok bg-ok-soft" : partial ? "border-brand bg-brand-soft" : "border-bad bg-bad-soft";
+  const verdict = reveal.isCorrect
+    ? "Тачно ✓"
+    : partial
+      ? `Делимично тачно — ${formatPoints(reveal.points)} од ${formatPoints(question.points)} бода`
+      : "Није тачно";
+
   return (
-    <section
-      className={`rounded-xl border-2 p-4 text-[16px] leading-relaxed ${reveal.isCorrect ? "border-ok bg-ok-soft" : "border-bad bg-bad-soft"}`}
-      aria-live="polite"
-    >
-      <p className="text-[17px] font-semibold">{reveal.isCorrect ? "Тачно ✓" : "Није тачно"}</p>
+    <section className={`rounded-xl border-2 p-4 text-[16px] leading-relaxed ${box}`} aria-live="polite">
+      <p className="text-[17px] font-semibold">{verdict}</p>
       {correctText ? (
         <div className="mt-2">
           <p className="text-sm font-semibold text-muted">Тачан одговор</p>

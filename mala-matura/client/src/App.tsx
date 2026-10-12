@@ -89,7 +89,8 @@ export default function App() {
 
   // Током решавања заглавље не лепи за врх: трака при дну је навигација, а
   // екран остаје задатку.
-  const solving = location.startsWith("/vezbanje/") || location.startsWith("/provera/");
+  const solving =
+    location.startsWith("/vezbanje/") || location.startsWith("/vezbanje-test/") || location.startsWith("/provera/");
 
   return (
     <div className="min-h-dvh">
@@ -111,7 +112,14 @@ export default function App() {
       <Switch>
         <Route path="/">{() => <HomePage user={user} />}</Route>
         <Route path="/vezbanje/:subject/:section">
-          {(params) => <PracticePage subjectId={decodeURIComponent(params.subject)} section={decodeURIComponent(params.section)} />}
+          {(params) => (
+            <PracticePage
+              source={{ subjectId: decodeURIComponent(params.subject), section: decodeURIComponent(params.section) }}
+            />
+          )}
+        </Route>
+        <Route path="/vezbanje-test/:key">
+          {(params) => <PracticePage source={{ testKey: decodeURIComponent(params.key) }} />}
         </Route>
         <Route path="/provera/:subject">{(params) => <TestPage subjectId={decodeURIComponent(params.subject)} />}</Route>
         <Route path="/admin">{() => (user.role === "admin" ? <AdminPage /> : <HomePage user={user} />)}</Route>
